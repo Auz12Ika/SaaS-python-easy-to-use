@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - My SaaS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin: 15px 0;
+            position: relative;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .password-container {
+            position: relative;
+        }
+        .toggle-password {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+        }
+        .password-strength {
+            margin-top: 5px;
+            height: 5px;
+            background-color: #eee;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        .strength-weak { width: 25%; background-color: #e74c3c; }
+        .strength-medium { width: 50%; background-color: #f39c12; }
+        .strength-strong { width: 75%; background-color: #3498db; }
+        .strength-very-strong { width: 100%; background-color: #2ecc71; }
+        .strength-text {
+            font-size: 12px;
+            margin-top: 3px;
+            color: #666;
+        }
+        .requirements {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .requirement {
+            margin: 2px 0;
+        }
+        .requirement.met {
+            color: #2ecc71;
+        }
+        .requirement.unmet {
+            color: #e74c3c;
+        }
+        button[type="submit"] {
+            background: #28a745;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <h1>Create Your Account</h1>
+    
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    
+    <form method="POST" id="registerForm">
+        <div class="form-group">
+            <label for="name">Full Name:</label>
+            <input type="text" name="name" id="name" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="company">Company:</label>
+            <input type="text" name="company" id="company" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" name="email" id="email" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <div class="password-container">
+                <input type="password" name="password" id="password" required 
+                       oninput="checkPasswordStrength()">
+                <button type="button" class="toggle-password" onclick="togglePassword()">
+                    👁️
+                </button>
+            </div>
+            <div class="password-strength">
+                <div class="strength-bar" id="strengthBar"></div>
+            </div>
+            <div class="strength-text" id="strengthText">Enter a password</div>
+            
+            <div class="requirements" id="requirements">
+                <div class="requirement unmet" id="length">✓ At least 8 characters</div>
+                <div class="requirement unmet" id="uppercase">✓ One uppercase letter</div>
+                <div class="requirement unmet" id="lowercase">✓ One lowercase letter</div>
+                <div class="requirement unmet" id="number">✓ One number</div>
+                <div class="requirement unmet" id="special">✓ One special character</div>
+            </div>
+        </div>
+        
+        <button type="submit">Register</button>
+    </form>
+    
+    <p style="margin-top: 20px; text-align: center;">
+        Already have an account? <a href="/login">Login here</a>
+    </p>
+
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.querySelector('.toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleButton.textContent = '🙈';
+            } else {
+                passwordInput.type = 'password';
+                toggleButton.textContent = '👁️';
+            }
+        }
+
+        function checkPasswordStrength() {
+            const password = document.getElementById('password').value;
+            const strengthBar = document.getElementById('strengthBar');
+            const strengthText = document.getElementById('strengthText');
+            
+            // Reset
+            strengthBar.className = 'strength-bar';
+            strengthText.textContent = 'Enter a password';
+            
+            if (password.length === 0) {
+                return;
+            }
+            
+            // Check requirements
+            const hasLength = password.length >= 8;
+            const hasUppercase = /[A-Z]/.test(password);
+            const hasLowercase = /[a-z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+            const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+            
+            // Update requirement indicators
+            document.getElementById('length').className = hasLength ? 'requirement met' : 'requirement unmet';
+            document.getElementById('uppercase').className = hasUppercase ? 'requirement met' : 'requirement unmet';
+            document.getElementById('lowercase').className = hasLowercase ? 'requirement met' : 'requirement unmet';
+            document.getElementById('number').className = hasNumber ? 'requirement met' : 'requirement unmet';
+            document.getElementById('special').className = hasSpecial ? 'requirement met' : 'requirement unmet';
+            
+            // Calculate strength score
+            let strength = 0;
+            if (hasLength) strength += 1;
+            if (hasUppercase) strength += 1;
+            if (hasLowercase) strength += 1;
+            if (hasNumber) strength += 1;
+            if (hasSpecial) strength += 1;
+            
+            // Update strength indicator
+            switch (strength) {
+                case 0:
+                case 1:
+                    strengthBar.className = 'strength-bar strength-weak';
+                    strengthText.textContent = 'Weak';
+                    strengthText.style.color = '#e74c3c';
+                    break;
+                case 2:
+                    strengthBar.className = 'strength-bar strength-medium';
+                    strengthText.textContent = 'Medium';
+                    strengthText.style.color = '#f39c12';
+                    break;
+                case 3:
+                    strengthBar.className = 'strength-bar strength-strong';
+                    strengthText.textContent = 'Strong';
+                    strengthText.style.color = '#3498db';
+                    break;
+                case 4:
+                case 5:
+                    strengthBar.className = 'strength-bar strength-very-strong';
+                    strengthText.textContent = 'Very Strong';
+                    strengthText.style.color = '#2ecc71';
+                    break;
+            }
+        }
+
+        // Validate form before submission
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            const password = document.getElementById('password').value;
+            const hasLength = password.length >= 8;
+            const hasUppercase = /[A-Z]/.test(password);
+            const hasLowercase = /[a-z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+            const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+            
+            if (!hasLength || !hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
+                e.preventDefault();
+                alert('Please meet all password requirements before submitting.');
+            }
+        });
+    </script>
+</body>
+</html>

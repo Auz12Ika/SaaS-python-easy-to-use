@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - My SaaS</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { background: #f5f5f5; padding: 20px; border-radius: 5px; }
+        .plan-card { border: 1px solid #ddd; padding: 20px; margin: 10px; border-radius: 5px; display: inline-block; }
+        .premium { border-color: gold; background: #fffdf0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Welcome, {{ user.name }}!</h1>
+        <p>Company: {{ user.company }} | Plan: {{ user.plan }} | Email: {{ user.email }}</p>
+        <a href="/logout">Logout</a>
+    </div>
+
+    <h2>Subscription Management</h2>
+    <div>
+        {% for plan_name, plan_data in plans.items() %}
+        <div class="plan-card {% if plan_name == user.plan %}premium{% endif %}">
+            <h3>{{ plan_name|title }} Plan</h3>
+            <p>${{ plan_data.price }}/month</p>
+            <ul>
+                {% for feature in plan_data.features %}
+                <li>{{ feature }}</li>
+                {% endfor %}
+            </ul>
+            {% if plan_name != user.plan %}
+            <button onclick="upgradePlan('{{ plan_name }}')">Upgrade to {{ plan_name }}</button>
+            {% else %}
+            <button disabled>Current Plan</button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        async function upgradePlan(plan) {
+            const response = await fetch('/upgrade', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({plan: plan})
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Plan upgraded successfully!');
+                location.reload();
+            } else {
+                alert('Upgrade failed: ' + result.error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+# test_auth_offline.py
+import bcrypt
+from cryptography.fernet import Fernet
+import base64
+from datetime import datetime
+from typing import Tuple
+
+class CryptoManager:
+    def __init__(self, secret_key: str):
+        # Generate key dari secret_key
+        key = base64.urlsafe_b64encode(secret_key[:32].encode().ljust(32, b'\0'))
+        self.cipher = Fernet(key)
+    
+    def hash_password(self, password: str) -> str:
+        """Hash password untuk authentication"""
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def verify_hash(self, password: str, hashed_password: str) -> bool:
+        """Verifikasi password terhadap hash"""
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+        except:
+            return False
+    
+    def encrypt(self, data: str) -> str:
+        """Enkripsi data (bisa di-decrypt)"""
+        return self.cipher.encrypt(data.encode()).decode()
+    
+    def decrypt(self, encrypted_data: str) -> str:
+        """Decrypt data"""
+        return self.cipher.decrypt(encrypted_data.encode()).decode()
+
+class User:
+    def __init__(self, id: str = None, **kwargs):
+        self.id = id
+        self.name = kwargs.get('name', '')
+        self.email = kwargs.get('email', '')
+        self.company = kwargs.get('company', '')
+        self.plan = kwargs.get('plan', 'free')
+        self.created_at = kwargs.get('created_at', '')
+        self.last_login = kwargs.get('last_login', '')
+        self.is_active = kwargs.get('is_active', True)
+        self.password_hash = kwargs.get('password_hash', '')
+        self.password_encrypted = kwargs.get('password_encrypted', '')
+
+class OfflineDatabase:
+    def __init__(self):
+        self.users = {}
+        self.next_id = 1
+    
+    def create_user(self, user_data):
+        user_id = str(self.next_id)
+        self.next_id += 1
+        
+        user_data['id'] = user_id
+        self.users[user_id] = User(**user_data)
+        return user_id
+    
+    def get_user_by_email(self, email):
+        for user in self.users.values():
+            if user.email == email:
+                return user
+        return None
+    
+    def get_user(self, user_id):
+        return self.users.get(user_id)
+    
+    def update_user(self, user_id, updates):
+        if user_id in self.users:
+            user = self.users[user_id]
+            for key, value in updates.items():
+                setattr(user, key, value)
+            return True
+        return False
+
+class AuthManager:
+    def __init__(self, database, crypto_manager: CryptoManager):
+        self.database = database
+        self.crypto = crypto_manager
+
+    def register(self, name: str, email: str, company: str, password: str) -> Tuple[bool, str]:
+        """Register user baru"""
+        email = email.lower().strip()
+        existing_user = self.database.get_user_by_email(email)
+        if existing_user:
+            return False, "Email already registered."
+
+        # Hash password untuk authentication
+        hashed_password = self.crypto.hash_password(password)
+        
+        # Encrypt password untuk backup
+        encrypted_password = self.crypto.encrypt(password)
+        
+        user_data = {
+            'name': name,
+            'email': email,
+            'company': company,
+            'password_hash': hashed_password,
+            'password_encrypted': encrypted_password,
+            'plan': 'free',
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'is_active': True
+        }
+
+        user_id = self.database.create_user(user_data)
+        
+        # Verifikasi data tersimpan
+        saved_user = self.database.get_user(user_id)
+        if saved_user and saved_user.password_hash:
+            print(f"✅ REGISTER BERHASIL: User {email} berhasil dibuat")
+            print(f"   Password hash: {saved_user.password_hash[:50]}...")
+            print(f"   Password encrypted: {saved_user.password_encrypted[:50]}...")
+            return True, user_id
+        else:
+            return False, "Registration failed"
+
+    def login(self, email: str, password: str) -> Tuple[bool, str]:
+        """Login user"""
+        email = email.lower().strip()
+        
+        # Cari user
+        user = self.database.get_user_by_email(email)
+        if not user:
+            return False, "User not found"
+        
+        print(f"🔍 DEBUG LOGIN:")
+        print(f"   - User: {user.name}")
+        print(f"   - Password hash: {'✅ Ada' if user.password_hash else '❌ Tidak ada'}")
+        
+        # Jika tidak ada password hash
+        if not user.password_hash:
+            return False, "Account not properly set up"
+        
+        # Verifikasi password
+        if self.crypto.verify_hash(password, user.password_hash):
+            # Update last login
+            self.database.update_user(user.id, {
+                'last_login': datetime.now().isoformat()
+            })
+            print(f"✅ LOGIN BERHASIL: {user.email}")
+            return True, user.id
+        else:
+            print(f"❌ LOGIN GAGAL: Password salah")
+            return False, "Wrong password"
+
+    def get_user_password(self, user_id: str) -> str:
+        """Dapatkan password asli (decrypt)"""
+        user = self.database.get_user(user_id)
+        if user and user.password_encrypted:
+            try:
+                return self.crypto.decrypt(user.password_encrypted)
+            except:
+                return None
+        return None
+
+def main():
+    print("=== OFFLINE AUTH SYSTEM TEST ===")
+    print()
+    
+    # Inisialisasi
+    SECRET_KEY = "BNzuGEnl2S63BP0adsNW8iTKJC299Ucpn8DgnkbzG6vOsdpT6JKRYRKOuCwiNSS33rdB2pbQ03YtquX1zSoTehs"
+    
+    crypto = CryptoManager(SECRET_KEY)
+    database = OfflineDatabase()
+    auth = AuthManager(database, crypto)
+    
+    # Test 1: Register user baru
+    print("1. TEST REGISTER")
+    print("-" * 50)
+    
+    success, result = auth.register(
+        name="Usera", 
+        email="user@gmail.com", 
+        company="Test Company", 
+        password="Password123!"
+    )
+    
+    if success:
+        user_id = result
+        print(f"✅ User berhasil dibuat dengan ID: {user_id}")
+    else:
+        print(f"❌ Gagal: {result}")
+        return
+    
+    print()
+    
+    # Test 2: Login dengan password benar
+    print("2. TEST LOGIN - PASSWORD BENAR")
+    print("-" * 50)
+    
+    success, result = auth.login("user@gmail.com", "Password123!")
+    
+    if success:
+        print(f"✅ Login berhasil! User ID: {result}")
+        
+        # Tampilkan info user
+        user = database.get_user(result)
+        print(f"   👤 User: {user.name}")
+        print(f"   📧 Email: {user.email}")
+        print(f"   🏢 Company: {user.company}")
+        print(f"   📅 Last Login: {user.last_login}")
+    else:
+        print(f"❌ Login gagal: {result}")
+    
+    print()
+    
+    # Test 3: Login dengan password salah
+    print("3. TEST LOGIN - PASSWORD SALAH")
+    print("-" * 50)
+    
+    success, result = auth.login("user@gmail.com", "WrongPassword")
+    
+    if success:
+        print(f"❌ Seharusnya gagal tapi berhasil? User ID: {result}")
+    else:
+        print(f"✅ Benar! Login gagal: {result}")
+    
+    print()
+    
+    # Test 4: Test decrypt password
+    print("4. TEST DECRYPT PASSWORD")
+    print("-" * 50)
+    
+    original_password = auth.get_user_password(user_id)
+    if original_password:
+        print(f"✅ Password asli: {original_password}")
+        print(f"🔐 Password terenkripsi: {user.password_encrypted[:50]}...")
+    else:
+        print("❌ Gagal decrypt password")
+    
+    print()
+    
+    # Test 5: Test hash verification manual
+    print("5. TEST HASH VERIFICATION MANUAL")
+    print("-" * 50)
+    
+    user = database.get_user(user_id)
+    test_passwords = [
+        "Password123!",  # benar
+        "password123!",  # salah (huruf kecil)
+        "Password123",   # salah (tanpa !)
+        "PASSWORD123!"   # salah (huruf besar semua)
+    ]
+    
+    for pwd in test_passwords:
+        is_correct = crypto.verify_hash(pwd, user.password_hash)
+        status = "✅ BENAR" if is_correct else "❌ SALAH"
+        print(f"   Password '{pwd}': {status}")
+    
+    print()
+    
+    # Test 6: Register user kedua
+    print("6. TEST REGISTER USER KEDUA")
+    print("-" * 50)
+    
+    success, result = auth.register(
+        name="Admin", 
+        email="admin@example.com", 
+        company="Admin Corp", 
+        password="Admin@456"
+    )
+    
+    if success:
+        print(f"✅ User admin berhasil dibuat")
+        
+        # Test login user kedua
+        success, result = auth.login("admin@example.com", "Admin@456")
+        if success:
+            print(f"✅ Login admin berhasil!")
+        else:
+            print(f"❌ Login admin gagal: {result}")
+    else:
+        print(f"❌ Gagal register admin: {result}")
+    
+    print()
+    print("=== TEST SELESAI ===")
+
+if __name__ == "__main__":
+    main()
